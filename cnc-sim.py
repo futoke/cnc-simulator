@@ -2,10 +2,6 @@ import sys
 import time
 import random
 import threading
-import multiprocessing
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 from math import sqrt
 from tkinter import *
@@ -24,36 +20,8 @@ class App(Frame):
 
         self.anim_stop = False
 
-        speed = 40 # steps per second
-        accel = 20 # steps per second per second
-        num_steps_x = 100
-        num_steps_y = 500
-
-        path_len = sqrt(num_steps_x * num_steps_x + num_steps_y * num_steps_y)
-        print('path_len: ', path_len)
-        move_time = sqrt((2 * path_len) / accel)
-        # move_time = path_len / speed
-
-        print('move_time: ', move_time)
-        if num_steps_x > 0:
-            speed_x =  (2 * num_steps_x) / move_time
-            # speed_x = num_steps_x / move_time
-        print('speed_x: ', speed_x)
-        if num_steps_y > 0:
-            speed_y = (2 * num_steps_y) / move_time
-            # speed_y = num_steps_y / move_time
-        print('speed_y: ', speed_y)
-
-        self.timer_x = Timer(
-            speed=speed_x,
-            steps=num_steps_x,
-            time=move_time
-        )
-        self.timer_y = Timer(
-            speed=speed_y,
-            steps=num_steps_y,
-            time=move_time
-        )
+        self.timer_x = Timer()
+        self.timer_y = Timer()
 
         self.timer_x.start()
         self.timer_y.start()
@@ -87,56 +55,60 @@ class App(Frame):
     def animate(self):
         # if not self.anim_stop:
 
-        def get_curr_speed (timer):
-            if timer.move_time > 0:
-                return timer.ticks / timer.move_time
-            else:
-                return 0
+        # def get_curr_speed (timer):
+        #     if timer.move_time > 0:
+        #         return timer.ticks / timer.move_time
+        #     else:
+        #         return 0
 
 
         self.img.put('#000000', (self.timer_x.ticks, self.timer_y.ticks))
 
-        tmpl = (
-            'X: {}, Y: {}, '
-            'Vx: {:.2f} шаг./с, Vy: {:.2f} шаг./с, V: {:.2f} шаг./с, '
-            't: {:.2f} c'
-        )
+        # tmpl = (
+        #     'X: {}, Y: {}, '
+        #     'Vx: {:.2f} шаг./с, Vy: {:.2f} шаг./с, V: {:.2f} шаг./с'
+        # )
 
-        curr_speed_x = get_curr_speed(self.timer_x)
-        curr_speed_y = get_curr_speed(self.timer_y)
-        curr_speed = sqrt(curr_speed_x*curr_speed_x + curr_speed_y*curr_speed_y)
+        # curr_speed_x = get_curr_speed(self.timer_x)
+        # curr_speed_y = get_curr_speed(self.timer_y)
+        # curr_speed = sqrt(curr_speed_x*curr_speed_x + curr_speed_y*curr_speed_y)
 
 
-        self.label.configure(
-            text=tmpl.format(
-                self.timer_x.ticks,
-                self.timer_y.ticks,
-                curr_speed_x,
-                curr_speed_y,
-                curr_speed,
-                self.timer_x.move_time
-            )
-        )
+        # self.label.configure(
+        #     text=tmpl.format(
+        #         self.timer_x.ticks,
+        #         self.timer_y.ticks,
+        #         curr_speed_x,
+        #         curr_speed_y,
+        #         curr_speed,
+        #     )
+        # )
+        self.label.configure(text='X: {}, Y: {}'.format(self.timer_x.ticks, self.timer_y.ticks))
         self.canvas.update()
         self.after(1, self.animate)
 
     def quit(self):
         self.timer_x.kill()
         self.timer_y.kill()
-        # self.timer_x.terminate()
-        # self.timer_y.terminate()
         self.master.destroy()
 
     def start(self):
-        self.timer_x.ticks = 0
-        self.timer_y.ticks = 0
-        self.timer_x.delay = 0
-        self.timer_y.delay = 0
-        self.timer_x.steps = int(self.entry_coord_x.get())
-        self.timer_y.steps = int(self.entry_coord_y.get())
-        self.img.blank()
+        self.img.blank() # Temporary blank the image.
 
-    
+        speed = 40 # steps per second
+        accel = 20 # max accel steps per second per second
+        num_steps_x = int(self.entry_coord_x.get())
+        num_steps_y = int(self.entry_coord_y.get())
+
+        move_time = (2 * sqrt(num_steps_x**2 + num_steps_y**2)) / speed
+
+        self.timer_x.accel = (2 * num_steps_x) / (move_time**2)
+        self.timer_y.accel = (2 * num_steps_y) / (move_time**2)
+   
+        self.timer_x.steps = num_steps_x
+        self.timer_y.steps = num_steps_y
+
+
 class KillableThread(threading.Thread):
     
     def __init__(self):
@@ -157,66 +129,33 @@ class KillableThread(threading.Thread):
     
 class Timer(KillableThread):
     
-    def __init__(self, speed, steps, time):
+    def __init__(self, steps=0, speed=0, accel=0):
         KillableThread.__init__(self)
-        self.speed = speed
-        self.steps = steps
-        self.accel = speed / time
-
-        self.ticks = 0
-        self.delay = 0
-        self.move_time = 0
         
+        self.ticks = 0
+        self.delay = 0.0001
+        self.steps = steps
+        self.speed = speed
+        self.accel = accel
 
     def run(self):
 
         while True:
             if self.ticks < self.steps:
+                # print(self)
                 self.delay = (
                     (sqrt((2) / self.accel)) *
-                    (sqrt(self.ticks + 5) - sqrt(self.ticks))
+                    (sqrt(self.ticks + 1) - sqrt(self.ticks))
                 )
                 # self.delay = 1 / self.speed
-                
-                time.sleep(self.delay)
 
-                self.move_time += self.delay
-                self.ticks += 5
-                # print(self)
+                self.ticks += 1
             else:
                 self.ticks = 0
                 self.steps = 0
+                self.delay = 0.001
 
-
-# class Timer(multiprocessing.Process):
-    
-#     def __init__(self, speed, steps, time):
-#         multiprocessing.Process.__init__(self)
-#         self.daemon = True
-
-#         self.speed = speed
-#         self.steps = steps
-#         self.accel = speed / time
-
-#         self.ticks = 0
-#         self.delay = 0
-#         self.move_time = 0
-        
-
-#     def run(self):
-
-#         while self.ticks < self.steps:
-#             self.delay = (
-#                 (sqrt((2) / self.accel)) *
-#                 (sqrt(self.ticks + 1) - sqrt(self.ticks))
-#             )
-#             # self.delay = 1 / self.speed
-            
-#             time.sleep(self.delay)
-
-#             self.move_time += self.delay
-#             self.ticks += 1  
-#             print(self)
+            time.sleep(self.delay)
 
             
 def main():
