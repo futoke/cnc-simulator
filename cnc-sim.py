@@ -83,7 +83,12 @@ class App(Frame):
         #         curr_speed,
         #     )
         # )
-        self.label.configure(text='X: {}, Y: {}'.format(self.timer_x.ticks, self.timer_y.ticks))
+        velocity = 0
+        if self.timer_x.delay != 0 and self.timer_x.delay != 0:
+            velocity = sqrt((1 / self.timer_x.delay)**2 + (1 / self.timer_y.delay)**2)
+        print(velocity)
+        
+        self.label.configure(text='X: {}, Y: {}, V: {:.2f} ш/с'.format(self.timer_x.ticks, self.timer_y.ticks, velocity))
         self.canvas.update()
         self.after(1, self.animate)
 
@@ -133,6 +138,7 @@ class Timer(KillableThread):
         KillableThread.__init__(self)
         
         self.ticks = 0
+        self.move_time = 0
         self.delay = 0.0001
         self.steps = steps
         self.speed = speed
@@ -150,10 +156,12 @@ class Timer(KillableThread):
                 # self.delay = 1 / self.speed
 
                 self.ticks += 1
+                self.move_time += self.delay
             else:
                 self.ticks = 0
                 self.steps = 0
-                self.delay = 0.001
+                self.move_time = 0
+                self.delay = 0.0001
 
             time.sleep(self.delay)
 
