@@ -18,12 +18,12 @@ def generate(*colors, grad_len=256):
     gradient = []
 
     for i, color in enumerate(colors):
-        # start color...
+        # Start color...
         r1 = c2f(red(color))
         g1 = c2f(green(color))
         b1 = c2f(blue(color))
 
-        # end color...
+        # End color...
         color2 = colors[(i + 1) % len(colors)]
         r2 = c2f(red(color2))
         g2 = c2f(green(color2))
@@ -36,7 +36,7 @@ def generate(*colors, grad_len=256):
             r = (1.0 - t) * r1 + t * r2
             g = (1.0 - t) * g1 + t * g2
             b = (1.0 - t) * b1 + t * b2
-            gradient.append('#{0:x}'.format(pack(r, g, b)))
+            gradient.append('#{:06X}'.format(pack(r, g, b)))
 
     return gradient
 
