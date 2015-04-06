@@ -36,7 +36,7 @@ def generate(*colors, grad_len=256):
             r = (1.0 - t) * r1 + t * r2
             g = (1.0 - t) * g1 + t * g2
             b = (1.0 - t) * b1 + t * b2
-            gradient.append('#{0:x},'.format(pack(r, g, b)))
+            gradient.append('#{0:x}'.format(pack(r, g, b)))
 
     return gradient
 
