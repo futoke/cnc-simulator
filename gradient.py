@@ -1,45 +1,49 @@
-def generate(*colors, grad_len=256):
-    """The function to generate the gradient and returns the list of colors as
-    packed color strings.
-    """
+def hex_to_RGB(hx):
+    ''' "#FFFFFF" -> [255,255,255] '''
 
-    colors_per_step = grad_len / len (colors)
-    # Get the 'corrected' length of the gradient...
-    num_colors = int(colors_per_step) * len(colors)
+    # Pass 16 to the integer function for change of base.
+    return [int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16)]
 
-    # Color conversion utils.
-    f2c = lambda f: int(f * 255.0) & 0xff
-    c2f = lambda c: float(c) / 255.0
-    red = lambda c: (c >> 16) & 0xff
-    green = lambda c: (c >> 8) & 0xff
-    blue = lambda c: c & 0xff
-    pack = lambda r, g, b: ((f2c(r) << 16) | (f2c(g) << 8) | f2c(b))
 
-    gradient = []
+def RGB_to_hex(RGB):
+    ''' [255,255,255] -> "#FFFFFF" '''
 
-    for i, color in enumerate(colors):
-        # Start color...
-        r1 = c2f(red(color))
-        g1 = c2f(green(color))
-        b1 = c2f(blue(color))
+    # Components need to be integers for hex to make sense.
+    RGB = [int(x) for x in RGB]
+    return "#" + "".join(
+        ["0{0:x}".format(v) if v < 16 else"{0:x}".format(v) for v in RGB]
+    )
 
-        # End color...
-        color2 = colors[(i + 1) % len(colors)]
-        r2 = c2f(red(color2))
-        g2 = c2f(green(color2))
-        b2 = c2f(blue(color2))
 
-        # generate a gradient of one step from color to color:
-        delta = 1.0 / colors_per_step
-        for j in range(int(colors_per_step)):
-            t = j * delta
-            r = (1.0 - t) * r1 + t * r2
-            g = (1.0 - t) * g1 + t * g2
-            b = (1.0 - t) * b1 + t * b2
-            gradient.append('#{:06X}'.format(pack(r, g, b)))
+def generate(start_hex, finish_hex="#FFFFFF", n=40):
+    '''Returns a gradient list of (n) colors between
+    two hex colors. start_hex and finish_hex
+    should be the full six-digit color string,
+    inlcuding the number sign ("#FFFFFF")
+    '''
+    
+    # Initilize a list of the output colors with the starting color.
+    RGB_list = [start_hex]
 
-    return gradient
+    # Starting and ending colors in RGB form.
+    s = hex_to_RGB(start_hex)
+    f = hex_to_RGB(finish_hex)
+    
+    # Calcuate a color at each evenly spaced value of t from 1 to n.
+    for t in range(1, n):
+    # Interpolate RGB vector for color at the current value of t.
+        curr_vector = [
+            int(s[j] + (float(t) / (n - 1)) * (f[j] - s[j]))
+            for j in range(3)
+        ]
+        # Add it to our list of output colors
+        RGB_list.append(RGB_to_hex(curr_vector))
+
+    return RGB_list
 
 
 if __name__ == '__main__':
-    print(generate(0x00ff00, 0xff0000))
+    
+    gradient = generate('#00ff00', '#ff0000')
+    for color in gradient:
+        print(color)
