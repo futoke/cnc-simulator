@@ -1,13 +1,14 @@
-import sys
 import time
-import random
 import threading
+
+import gradient
 
 from math import sqrt
 from tkinter import *
 
 
 WIDTH, HEIGHT = 800, 600
+POSITIVE, NEGATIVE, ZERO = 0, 1, 2
 
 
 class App(Frame):
@@ -19,12 +20,20 @@ class App(Frame):
         self.create_widgets()
 
         self.anim_stop = False
+        self.colormap = gradient.generate('#00ff00', '#ff0000')
 
-        self.timer_x = Timer()
-        self.timer_y = Timer()
+        self.motor_x = Motor()
+        self.motor_y = Motor()
 
-        self.timer_x.start()
-        self.timer_y.start()
+        self.motor_x.start()
+        self.motor_y.start()
+
+        self.pos_x = 0
+        self.pos_y = 0
+        self.new_pos_x = 0
+        self.new_pos_y = 0
+        self.dir_x = POSITIVE
+        self.dir_y = POSITIVE
 
         self.animate()
 
@@ -43,75 +52,74 @@ class App(Frame):
         self.btn_reset.pack(side=LEFT)
 
         self.entry_coord_x = Entry()
+        self.entry_coord_x.insert(0, '100')
         self.entry_coord_x.pack(side=LEFT)
 
         self.entry_coord_y = Entry()
+        self.entry_coord_y.insert(0, '500')
         self.entry_coord_y.pack(side=LEFT)
 
         self.label = Label(text='')
         self.label.pack()
 
-
     def animate(self):
-        # if not self.anim_stop:
-
-        # def get_curr_speed (timer):
-        #     if timer.move_time > 0:
-        #         return timer.ticks / timer.move_time
-        #     else:
-        #         return 0
-
-
-        self.img.put('#000000', (self.timer_x.ticks, self.timer_y.ticks))
-
-        # tmpl = (
-        #     'X: {}, Y: {}, '
-        #     'Vx: {:.2f} шаг./с, Vy: {:.2f} шаг./с, V: {:.2f} шаг./с'
-        # )
-
-        # curr_speed_x = get_curr_speed(self.timer_x)
-        # curr_speed_y = get_curr_speed(self.timer_y)
-        # curr_speed = sqrt(curr_speed_x*curr_speed_x + curr_speed_y*curr_speed_y)
-
-
-        # self.label.configure(
-        #     text=tmpl.format(
-        #         self.timer_x.ticks,
-        #         self.timer_y.ticks,
-        #         curr_speed_x,
-        #         curr_speed_y,
-        #         curr_speed,
-        #     )
-        # )
         velocity = 0
-        if self.timer_x.delay != 0 and self.timer_x.delay != 0:
-            velocity = sqrt((1 / self.timer_x.delay)**2 + (1 / self.timer_y.delay)**2)
-        print(velocity)
+
+        if self.motor_x.move or self.motor_y.move:
+            # if self.dir_x == ZERO:
+            #     velocity = 1 / self.motor_y.delay
+            # elif self.dir_y == ZERO:
+            #     velocity = 1 / self.motor_x.delay
+            # else :
+            #     velocity = (
+            #         sqrt((1/self.motor_x.delay)**2 + (1/self.motor_y.delay)**2)
+            #     )
+            # velocity_color = self.colormap[int(velocity)]
+
+            self.img.put("#000000", (self.motor_x.pos, self.motor_y.pos))
         
-        self.label.configure(text='X: {}, Y: {}, V: {:.2f} ш/с'.format(self.timer_x.ticks, self.timer_y.ticks, velocity))
+        self.label.configure(
+            text='X: {}, Y: {}, V: {:.2f} ш/с'.format( 
+                self.motor_x.pos, self.motor_y.pos, velocity
+            )
+        )
         self.canvas.update()
         self.after(1, self.animate)
 
     def quit(self):
-        self.timer_x.kill()
-        self.timer_y.kill()
+        self.motor_x.kill()
+        self.motor_y.kill()
         self.master.destroy()
 
     def start(self):
-        self.img.blank() # Temporary blank the image.
+        if not self.motor_x.move and not self.motor_y.move:
+            # self.img.blank() # Temporary blank the image.
 
-        speed = 40 # steps per second
-        accel = 20 # max accel steps per second per second
-        num_steps_x = int(self.entry_coord_x.get())
-        num_steps_y = int(self.entry_coord_y.get())
+            speed = 40 # steps per second
+            accel = 20 # max accel steps per second per second
 
-        move_time = (2 * sqrt(num_steps_x**2 + num_steps_y**2)) / speed
+            num_steps_x = int(self.entry_coord_x.get()) - self.motor_x.pos
+            num_steps_y = int(self.entry_coord_y.get()) - self.motor_y.pos
 
-        self.timer_x.accel = (2 * num_steps_x) / (move_time**2)
-        self.timer_y.accel = (2 * num_steps_y) / (move_time**2)
-   
-        self.timer_x.steps = num_steps_x
-        self.timer_y.steps = num_steps_y
+            print(num_steps_x, num_steps_y)
+
+            move_time = (
+                (2 * sqrt(abs(num_steps_x)**2 + abs(num_steps_y)**2)) / speed
+            )
+
+            print('move time: ', move_time)
+
+            self.motor_x.accel = (2 * abs(num_steps_x)) / (move_time**2)
+            self.motor_x.steps = num_steps_x
+            self.motor_x.move = True
+
+            print('accel x: ', self.motor_x.accel)
+                
+            self.motor_y.accel = (2 * abs(num_steps_y)) / (move_time**2)
+            self.motor_y.steps = num_steps_y
+            self.motor_y.move = True
+
+            print('accel y: ', self.motor_y.accel)
 
 
 class KillableThread(threading.Thread):
@@ -132,45 +140,46 @@ class KillableThread(threading.Thread):
         self.kill_received = True
     
     
-class Timer(KillableThread):
+class Motor(KillableThread):
     
     def __init__(self, steps=0, speed=0, accel=0):
         KillableThread.__init__(self)
         
-        self.ticks = 0
-        self.move_time = 0
-        self.delay = 0.0001
+        self.pos = 0
+        self.step_counter = 0
         self.steps = steps
+        self.delay = 0.0001
+        self.move = False
         self.speed = speed
         self.accel = accel
 
-    def run(self):
-
+    def action(self):
         while True:
-            if self.ticks < self.steps:
-                # print(self)
+            if self.move and self.step_counter < abs(self.steps):
                 self.delay = (
                     (sqrt((2) / self.accel)) *
-                    (sqrt(self.ticks + 1) - sqrt(self.ticks))
+                    (sqrt(self.step_counter + 1) - sqrt(self.step_counter))
                 )
-                # self.delay = 1 / self.speed
+                self.step_counter += 1
 
-                self.ticks += 1
-                self.move_time += self.delay
+                if self.steps > 0:
+                    self.pos += 1
+                else:
+                    self.pos -= 1
             else:
-                self.ticks = 0
                 self.steps = 0
-                self.move_time = 0
+                self.step_counter = 0
                 self.delay = 0.0001
+                self.move = False
 
             time.sleep(self.delay)
 
             
 def main():
-    
     root = Tk()
     app = App(master=root)
     root.mainloop()
+
 
 if __name__ == '__main__':
     main()
