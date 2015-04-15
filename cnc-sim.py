@@ -20,20 +20,13 @@ class App(Frame):
         self.create_widgets()
 
         self.anim_stop = False
-        self.colormap = gradient.generate('#00ff00', '#ff0000')
+        self.colormap = gradient.generate('#00ff00', '#ff0000', n=40)
 
         self.motor_x = Motor()
         self.motor_y = Motor()
 
         self.motor_x.start()
         self.motor_y.start()
-
-        self.pos_x = 0
-        self.pos_y = 0
-        self.new_pos_x = 0
-        self.new_pos_y = 0
-        self.dir_x = POSITIVE
-        self.dir_y = POSITIVE
 
         self.animate()
 
@@ -66,18 +59,24 @@ class App(Frame):
         velocity = 0
 
         if self.motor_x.move or self.motor_y.move:
-            # if self.dir_x == ZERO:
-            #     velocity = 1 / self.motor_y.delay
-            # elif self.dir_y == ZERO:
-            #     velocity = 1 / self.motor_x.delay
-            # else :
-            #     velocity = (
-            #         sqrt((1/self.motor_x.delay)**2 + (1/self.motor_y.delay)**2)
-            #     )
-            # velocity_color = self.colormap[int(velocity)]
+            if self.motor_x.steps == 0:
+                velocity = int(1 / self.motor_y.delay)
+            elif self.motor_y.steps == 0:
+                velocity = int(1 / self.motor_x.delay)
+            else :
+                velocity = (
+                    int(sqrt(
+                        (1/self.motor_x.delay)**2 + (1/self.motor_y.delay)**2)
+                    )
+                )
 
-            self.img.put("#000000", (self.motor_x.pos, self.motor_y.pos))
-        
+            if velocity < len(self.colormap):
+                velocity_color = self.colormap[velocity]
+            else:
+                velocity_color = self.colormap[-1]
+
+            self.img.put(velocity_color, (self.motor_x.pos, self.motor_y.pos))
+
         self.label.configure(
             text='X: {}, Y: {}, V: {:.2f} ш/с'.format( 
                 self.motor_x.pos, self.motor_y.pos, velocity
@@ -111,12 +110,13 @@ class App(Frame):
 
             self.motor_x.accel = (2 * abs(num_steps_x)) / (move_time**2)
             self.motor_x.steps = num_steps_x
-            self.motor_x.move = True
-
+            
             print('accel x: ', self.motor_x.accel)
                 
             self.motor_y.accel = (2 * abs(num_steps_y)) / (move_time**2)
             self.motor_y.steps = num_steps_y
+
+            self.motor_x.move = True
             self.motor_y.move = True
 
             print('accel y: ', self.motor_y.accel)
@@ -148,7 +148,7 @@ class Motor(KillableThread):
         self.pos = 0
         self.step_counter = 0
         self.steps = steps
-        self.delay = 0.0001
+        self.delay = 0.01
         self.move = False
         self.speed = speed
         self.accel = accel
@@ -167,9 +167,8 @@ class Motor(KillableThread):
                 else:
                     self.pos -= 1
             else:
-                self.steps = 0
                 self.step_counter = 0
-                self.delay = 0.0001
+                self.delay = 0.01
                 self.move = False
 
             time.sleep(self.delay)
