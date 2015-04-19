@@ -1,5 +1,5 @@
 import time
-import threading
+import multiprocessing as mp
 
 import gradient
 
@@ -7,7 +7,9 @@ from math import sqrt
 from tkinter import *
 
 
+MAIN_FREQUENCY = 1000
 WIDTH, HEIGHT = 800, 600
+STOP, MOVE = 0, 1
 POSITIVE, NEGATIVE, ZERO = 0, 1, 2
 
 
@@ -19,8 +21,7 @@ class App(Frame):
         self.pack()
         self.create_widgets()
 
-        self.anim_stop = False
-        self.colormap = gradient.generate('#00ff00', '#ff0000', n=40)
+        self.colormap = gradient.generate('#0000ff', '#ff0000', n=40)
 
         self.motor_x = Motor()
         self.motor_y = Motor()
@@ -58,15 +59,18 @@ class App(Frame):
     def animate(self):
         velocity = 0
 
-        if self.motor_x.move or self.motor_y.move:
-            if self.motor_x.steps == 0:
-                velocity = int(1 / self.motor_y.delay)
-            elif self.motor_y.steps == 0:
-                velocity = int(1 / self.motor_x.delay)
+        if (self.motor_x.action.value == MOVE or
+            self.motor_y.action.value == MOVE):
+            if self.motor_x.steps.value == 0:
+                velocity = int(self.motor_y.velocity.value)
+            elif self.motor_y.steps.value == 0:
+                velocity = int(self.motor_x.velocity.value)
             else :
                 velocity = (
                     int(sqrt(
-                        (1/self.motor_x.delay)**2 + (1/self.motor_y.delay)**2)
+                            (self.motor_x.velocity.value)**2 + 
+                            (self.motor_y.velocity.value)**2
+                        )
                     )
                 )
 
@@ -75,30 +79,33 @@ class App(Frame):
             else:
                 velocity_color = self.colormap[-1]
 
-            self.img.put(velocity_color, (self.motor_x.pos, self.motor_y.pos))
+            self.img.put(velocity_color, (
+                self.motor_x.pos.value, self.motor_y.pos.value)
+            )
 
         self.label.configure(
             text='X: {}, Y: {}, V: {:.2f} ш/с'.format( 
-                self.motor_x.pos, self.motor_y.pos, velocity
+                self.motor_x.pos.value, self.motor_y.pos.value, velocity
             )
         )
-        self.canvas.update()
+        # self.canvas.update()
         self.after(1, self.animate)
 
     def quit(self):
-        self.motor_x.kill()
-        self.motor_y.kill()
+        self.motor_x.terminate()
+        self.motor_y.terminate()
         self.master.destroy()
 
     def start(self):
-        if not self.motor_x.move and not self.motor_y.move:
+        if (self.motor_x.action.value == STOP and
+            self.motor_y.action.value == STOP):
             # self.img.blank() # Temporary blank the image.
 
-            speed = 40 # steps per second
+            speed = 30 # steps per second
             accel = 20 # max accel steps per second per second
 
-            num_steps_x = int(self.entry_coord_x.get()) - self.motor_x.pos
-            num_steps_y = int(self.entry_coord_y.get()) - self.motor_y.pos
+            num_steps_x = int(self.entry_coord_x.get()) - self.motor_x.pos.value
+            num_steps_y = int(self.entry_coord_y.get()) - self.motor_y.pos.value
 
             print(num_steps_x, num_steps_y)
 
@@ -108,70 +115,58 @@ class App(Frame):
 
             print('move time: ', move_time)
 
-            self.motor_x.accel = (2 * abs(num_steps_x)) / (move_time**2)
-            self.motor_x.steps = num_steps_x
+            self.motor_x.accel.value = (2 * abs(num_steps_x)) / (move_time**2)
+            self.motor_x.steps.value = num_steps_x
             
-            print('accel x: ', self.motor_x.accel)
+            print('accel x: ', self.motor_x.accel.value)
                 
-            self.motor_y.accel = (2 * abs(num_steps_y)) / (move_time**2)
-            self.motor_y.steps = num_steps_y
+            self.motor_y.accel.value = (2 * abs(num_steps_y)) / (move_time**2)
+            self.motor_y.steps.value = num_steps_y
 
-            self.motor_x.move = True
-            self.motor_y.move = True
+            self.motor_x.action.value = MOVE
+            self.motor_y.action.value = MOVE
 
-            print('accel y: ', self.motor_y.accel)
-
-
-class KillableThread(threading.Thread):
+            print('accel y: ', self.motor_y.accel.value)
+    
+    
+class Motor(mp.Process):
     
     def __init__(self):
-        threading.Thread.__init__(self)
-        self.daemon = True
-        self.kill_received = False
+        mp.Process.__init__(self)
         
-    def run(self):
-        while not self.kill_received:
-            self.action()
-            
-    def action(self):
-        pass
-            
-    def kill(self):
-        self.kill_received = True
-    
-    
-class Motor(KillableThread):
-    
-    def __init__(self, steps=0, speed=0, accel=0):
-        KillableThread.__init__(self)
-        
-        self.pos = 0
         self.step_counter = 0
-        self.steps = steps
-        self.delay = 0.01
-        self.move = False
-        self.speed = speed
-        self.accel = accel
+        self.velocity = mp.Value('d', MAIN_FREQUENCY)
+        self.pos = mp.Value('l', 0)
+        self.steps = mp.Value('l', 0)
+        self.action = mp.Value('b', STOP)
+        self.velocity = mp.Value('d', 0)
+        self.accel = mp.Value('d', 0)
 
-    def action(self):
+    def run(self):
+
         while True:
-            if self.move and self.step_counter < abs(self.steps):
-                self.delay = (
-                    (sqrt((2) / self.accel)) *
+            if (self.action.value == MOVE and 
+                self.step_counter < abs(self.steps.value)):
+
+                self.velocity.value = 1 / (
+                    (sqrt((2) / self.accel.value)) *
                     (sqrt(self.step_counter + 1) - sqrt(self.step_counter))
                 )
                 self.step_counter += 1
 
-                if self.steps > 0:
-                    self.pos += 1
-                else:
-                    self.pos -= 1
+                with self.pos.get_lock():
+                    if self.steps.value > 0:
+                        
+                        self.pos.value += 1
+                    else:
+                        self.pos.value -= 1
             else:
                 self.step_counter = 0
-                self.delay = 0.01
-                self.move = False
+                self.velocity.value = MAIN_FREQUENCY
 
-            time.sleep(self.delay)
+                self.action.value = STOP
+
+            time.sleep(1 / self.velocity.value)
 
             
 def main():
